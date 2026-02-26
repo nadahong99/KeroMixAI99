@@ -40,6 +40,8 @@ jobs:
               COPY_PLUGIN_AFTER_BUILD FALSE
           )
 
+          juce_generate_juce_header(KeroMixAI)
+
           target_sources(KeroMixAI PRIVATE
               Source/PluginProcessor.cpp
               Source/PluginEditor.cpp
