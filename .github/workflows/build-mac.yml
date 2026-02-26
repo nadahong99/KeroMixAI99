@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install JUCE dependencies
         run: |
@@ -43,7 +43,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Upload AU artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: KeroMixAI-AU-macOS
           path: build/Build/Products/Release/KeroMixAI.component
@@ -60,7 +60,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Upload VST3 artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: KeroMixAI-VST3-macOS
           path: build_vst3/Build/Products/Release/KeroMixAI.vst3
