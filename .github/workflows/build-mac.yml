@@ -1,0 +1,67 @@
+name: Build macOS AU/VST3
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install JUCE dependencies
+        run: |
+          brew install cmake
+
+      - name: Clone JUCE
+        run: |
+          git clone --depth 1 https://github.com/juce-framework/JUCE.git JUCE
+
+      - name: Fix module paths in .jucer
+        run: |
+          sed -i '' 's|path="../../JUCE/modules"|path="JUCE/modules"|g' KeroMixAI.jucer
+          sed -i '' 's|path="..\\..\\JUCE\\JUCE\\modules"|path="JUCE/modules"|g' KeroMixAI.jucer
+
+      - name: Install Projucer and generate Xcode project
+        run: |
+          cmake -B JUCE/extras/Projucer/build -S JUCE/extras/Projucer -DJUCE_BUILD_EXTRAS=ON
+          cmake --build JUCE/extras/Projucer/build --target Projucer --config Release
+          JUCE/extras/Projucer/build/Projucer_artefacts/Release/Projucer.app/Contents/MacOS/Projucer --resave KeroMixAI.jucer
+
+      - name: Build with Xcode
+        run: |
+          xcodebuild -project Builds/MacOSX/KeroMixAI.xcodeproj \
+            -scheme "KeroMixAI - AU" \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload AU artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: KeroMixAI-AU-macOS
+          path: build/Build/Products/Release/KeroMixAI.component
+          if-no-files-found: warn
+
+      - name: Build VST3
+        run: |
+          xcodebuild -project Builds/MacOSX/KeroMixAI.xcodeproj \
+            -scheme "KeroMixAI - VST3" \
+            -configuration Release \
+            -derivedDataPath build_vst3 \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload VST3 artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: KeroMixAI-VST3-macOS
+          path: build_vst3/Build/Products/Release/KeroMixAI.vst3
+          if-no-files-found: warn
