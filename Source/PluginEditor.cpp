@@ -156,7 +156,6 @@ void KeroMixAIAudioProcessorEditor::resized()
     saveBtn.setBounds(patchArea.removeFromLeft(50).reduced(2));
     patchList.setBounds(patchArea.removeFromLeft(80).reduced(2));
     loadBtn.setBounds(patchArea.removeFromLeft(50).reduced(2));
-    deleteBtn.setBounds(patchArea.removeFromLeft(40).reduced(2));   // ✅ 버그 수정: deleteBtn 레이아웃 추가
 
     settingsBtn.setBounds(getWidth() - 40, 15, 25, 25);
 
@@ -194,7 +193,6 @@ void KeroMixAIAudioProcessorEditor::restoreSnapshot() {
 
 void KeroMixAIAudioProcessorEditor::sendToGroq(const juce::String& prompt)
 {
-    if (isThreadRunning()) return;  // ✅ 버그 수정: 스레드 중복 방지
     if (prompt.trim().isEmpty() || groqApiKey.isEmpty()) return;
     saveSnapshot();
     juce::String currentParams = "{";

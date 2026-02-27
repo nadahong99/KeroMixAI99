@@ -79,16 +79,33 @@ jobs:
         run: |
           cmake --build build --config Release
 
+      - name: Package AU
+        run: |
+          cd build/KeroMixAI_artefacts/Release/AU
+          zip -r ../../../../KeroMixAI-AU-macOS.zip KeroMixAI.component
+
       - name: Upload AU artifact
         uses: actions/upload-artifact@v4
         with:
           name: KeroMixAI-AU-macOS
-          path: build/KeroMixAI_artefacts/Release/AU/KeroMixAI.component
+          path: KeroMixAI-AU-macOS.zip
           if-no-files-found: warn
+
+      - name: Package VST3
+        run: |
+          cd build/KeroMixAI_artefacts/Release/VST3
+          zip -r ../../../../KeroMixAI-VST3-macOS.zip KeroMixAI.vst3
 
       - name: Upload VST3 artifact
         uses: actions/upload-artifact@v4
         with:
           name: KeroMixAI-VST3-macOS
-          path: build/KeroMixAI_artefacts/Release/VST3/KeroMixAI.vst3
+          path: KeroMixAI-VST3-macOS.zip
           if-no-files-found: warn
+```
+
+저장 후 cmd에서:
+```
+git add .
+git commit -m "Fix: correct zip packaging for component"
+git push
