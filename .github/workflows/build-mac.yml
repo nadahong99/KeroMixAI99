@@ -1,30 +1,23 @@
 name: Build macOS AU/VST3
-
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-
 jobs:
   build-mac:
     runs-on: macos-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Clone JUCE
         run: |
           git clone --depth 1 https://github.com/juce-framework/JUCE.git JUCE
-
       - name: Create CMakeLists.txt
         run: |
           cat > CMakeLists.txt << 'EOF'
           cmake_minimum_required(VERSION 3.22)
           project(KeroMixAI VERSION 1.0.0)
-
           add_subdirectory(JUCE)
-
           juce_add_plugin(KeroMixAI
               PLUGIN_MANUFACTURER_CODE Kero
               PLUGIN_CODE KrMA
@@ -39,20 +32,16 @@ jobs:
               EDITOR_WANTS_KEYBOARD_FOCUS FALSE
               COPY_PLUGIN_AFTER_BUILD FALSE
           )
-
           juce_generate_juce_header(KeroMixAI)
-
           target_sources(KeroMixAI PRIVATE
               Source/PluginProcessor.cpp
               Source/PluginEditor.cpp
           )
-
           target_compile_definitions(KeroMixAI PUBLIC
               JUCE_WEB_BROWSER=0
               JUCE_USE_CURL=1
               JUCE_VST3_CAN_REPLACE_VST2=0
           )
-
           target_link_libraries(KeroMixAI PRIVATE
               juce::juce_audio_basics
               juce::juce_audio_devices
@@ -69,43 +58,37 @@ jobs:
               juce::juce_gui_extra
           )
           EOF
-
       - name: Configure CMake
         run: |
           cmake -B build -S . \
             -DCMAKE_BUILD_TYPE=Release
-
       - name: Build
         run: |
           cmake --build build --config Release
-
       - name: Package AU
         run: |
           cd build/KeroMixAI_artefacts/Release/AU
-          zip -r ../../../../KeroMixAI-AU-macOS.zip KeroMixAI.component
-
+          zip -r KeroMixAI-AU-macOS.zip KeroMixAI.component
       - name: Upload AU artifact
         uses: actions/upload-artifact@v4
         with:
           name: KeroMixAI-AU-macOS
-          path: KeroMixAI-AU-macOS.zip
+          path: build/KeroMixAI_artefacts/Release/AU/KeroMixAI-AU-macOS.zip
           if-no-files-found: warn
-
       - name: Package VST3
         run: |
           cd build/KeroMixAI_artefacts/Release/VST3
-          zip -r ../../../../KeroMixAI-VST3-macOS.zip KeroMixAI.vst3
-
+          zip -r KeroMixAI-VST3-macOS.zip KeroMixAI.vst3
       - name: Upload VST3 artifact
         uses: actions/upload-artifact@v4
         with:
           name: KeroMixAI-VST3-macOS
-          path: KeroMixAI-VST3-macOS.zip
+          path: build/KeroMixAI_artefacts/Release/VST3/KeroMixAI-VST3-macOS.zip
           if-no-files-found: warn
 ```
 
-저장 후 cmd에서:
+파일 저장 후 cmd에서:
 ```
 git add .
-git commit -m "Fix: correct zip packaging for component"
+git commit -m "Fix: resolve merge conflict in build-mac.yml"
 git push
