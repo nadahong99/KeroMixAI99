@@ -246,7 +246,7 @@ void KeroMixAIAudioProcessor::savePatch(const juce::String& name)
     auto state = apvts.copyState();
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     xml->setAttribute("patchName", name);
-    getPatchDirectory().getChildFile(name + ".xml").writeTo(*xml);
+    xml->writeToFile(getPatchDirectory().getChildFile(name + ".xml"), {});
 }
 
 juce::StringArray KeroMixAIAudioProcessor::getSavedPatchNames()
