@@ -120,7 +120,7 @@ KeroMixAIAudioProcessorEditor::KeroMixAIAudioProcessorEditor(KeroMixAIAudioProce
     }
 
     // Settings button
-    settingsBtn.setButtonText(juce::CharPointer_UTF8("\xe2\x9a\x99")); // gear emoji
+    settingsBtn.setButtonText(juce::CharPointer_UTF8("\xe2\x9a\x99"));
     settingsBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xffeeeeee));
     settingsBtn.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff666666));
     settingsBtn.onClick = [this]() { showSettings(); };
@@ -512,19 +512,15 @@ void KeroMixAIAudioProcessorEditor::paint(juce::Graphics& g)
 
     g.setColour(kBg); g.fillAll();
 
-    // Main card
     juce::Rectangle<float> card(pad, pad, W - pad * 2, H - pad * 2);
     g.setColour(kCard); g.fillRoundedRectangle(card, 18.f);
     g.setColour(kBorder); g.drawRoundedRectangle(card, 18.f, 1.5f);
 
-    // Header strip
     g.setColour(kGreen.withAlpha(0.06f));
     g.fillRoundedRectangle(pad, pad, W - pad * 2, 44.f, 18.f);
 
-    // Keropi
     drawKeropi(g, pad + 14, pad + 2, 0.62f);
 
-    // Title
     g.setColour(kGreen);
     g.setFont(juce::Font("Arial", 20.f, juce::Font::bold));
     g.drawText("KeroMixAI", (int)(pad + 62), (int)(pad + 8), 180, 26, juce::Justification::left, false);
@@ -532,39 +528,29 @@ void KeroMixAIAudioProcessorEditor::paint(juce::Graphics& g)
     g.setColour(juce::Colour(0xffaaaaaa));
     g.drawText("by NADAHONG", (int)(pad + 62), (int)(pad + 28), 140, 14, juce::Justification::left, false);
 
-    // Divider between header and DSP
     const float dspY = pad + 48.f;
-    const float leftW = W * 0.62f;  // DSP panel width
+    const float leftW = W * 0.62f;
     const float rightX = leftW + 4.f;
     const float rightW = W - rightX - pad;
-
-    // Section backgrounds (left panel: EQ / COMP / DELAY / REVERB)
     float colW = (leftW - pad * 2 - 8.f) / 2.f;
 
-    // Left col: EQ top, COMP bottom
     drawSectionBg(g, { pad + 4, dspY,        colW, 190.f }, kEqBg, "EQ");
     drawSectionBg(g, { pad + 4, dspY + 196.f,  colW, 240.f }, kCompBg, "COMP");
-
-    // Right col: DELAY top, REVERB below
     drawSectionBg(g, { pad + 4 + colW + 6, dspY,        colW, 130.f }, kDelayBg, "DELAY");
     drawSectionBg(g, { pad + 4 + colW + 6, dspY + 136.f,  colW, 300.f }, kVerbBg, "REVERB");
 
-    // Master bar background
     g.setColour(juce::Colour(0xffF0F4F0));
     g.fillRoundedRectangle(pad + 4, H - pad - 36.f, leftW - 8.f, 30.f, 8.f);
     g.setColour(kGreen.withAlpha(0.5f));
     g.setFont(juce::Font(9.f, juce::Font::bold));
     g.drawText("MASTER", (int)(pad + 8), (int)(H - pad - 34), 50, 14, juce::Justification::left, false);
 
-    // Vertical divider
     g.setColour(kBorder);
     g.drawLine(leftW + 2, dspY, leftW + 2, H - pad, 1.f);
 
-    // Right panel sections
     drawSectionBg(g, { rightX, dspY,        rightW, 178.f }, kAiBg, "AI MIX");
     drawSectionBg(g, { rightX, dspY + 184.f,  rightW, 68.f }, kPatchBg, "PATCHES");
 
-    // Spectrum area (inside right panel, below patches)
     g.setColour(juce::Colour(0xffEEF4EE));
     g.fillRoundedRectangle(rightX, dspY + 258.f, rightW, 55.f, 8.f);
     g.setColour(kGreen.withAlpha(0.4f));
@@ -594,9 +580,6 @@ void KeroMixAIAudioProcessorEditor::resized()
     const float rightX = leftW + 4.f;
     const float rightW = W - rightX - pad;
 
-    // ── Knob placer lambda ────────────────────────────────────────────────
-    // places 'count' knobs starting at paramIdx inside rect (rx,ry,rw,rh)
-    // skipping 'topSkip' pixels for the section title
     auto placeRow = [&](int startIdx, int count, float rx, float ry, float rw, float rh, int topSkip)
         {
             const int kW = 58, kH = 58, lH = 14;
@@ -610,8 +593,6 @@ void KeroMixAIAudioProcessorEditor::resized()
             }
         };
 
-    // EQ: row1 lowG/midG/highG, row2 lowFreq/midFreq+midQ/highFreq
-    // row 1 (gains): indices 0,2,5
     {
         const int kW = 58, kH = 58, lH = 14, topSkip = 22;
         float rx = pad + 6, ry = dspY, rw = colW - 4;
@@ -622,7 +603,6 @@ void KeroMixAIAudioProcessorEditor::resized()
             labels[gainIdx[i]].setBounds(cx, cy, kW, lH);
             sliders[gainIdx[i]].setBounds(cx, cy + lH, kW, kH);
         }
-        // row 2 (freqs+Q): indices 1,3,4,6
         int fIdx[4] = { 1,3,4,6 };
         float fSp = rw / 4.f;
         for (int i = 0; i < 4; ++i) {
@@ -632,56 +612,41 @@ void KeroMixAIAudioProcessorEditor::resized()
         }
     }
 
-    // COMP: 5 knobs (thresh,ratio,attack,release,makeup) = indices 7-11
     placeRow(7, 5, pad + 6, dspY + 196.f, colW - 4, 90.f, 22);
-    // second row: makeup on its own? No, all 5 in one row is fine at colW
-
-    // DELAY: indices 12-14
     placeRow(12, 3, pad + 6 + colW + 6, dspY, colW - 4, 90.f, 22);
-
-    // REVERB: indices 15-18 (decay,size,damp,mix)
     placeRow(15, 4, pad + 6 + colW + 6, dspY + 136.f, colW - 4, 90.f, 22);
 
-    // MASTER fader: index 19
     {
         labels[19].setBounds((int)(pad + 8), (int)(H - pad - 34), 52, 16);
         sliders[19].setBounds((int)(pad + 62), (int)(H - pad - 38), (int)(leftW - 74), 32);
     }
 
-    // Lock buttons (inside header strip, above section titles)
     {
         float lbW = (leftW - pad * 2 - 16.f) / NUM_GROUPS;
         for (int g = 0; g < NUM_GROUPS; ++g)
             lockBtns[g].setBounds((int)(pad + 6 + g * (lbW + 4)), (int)(pad + 30), (int)lbW, 16);
     }
 
-    // ── Right panel ───────────────────────────────────────────────────────
-    // Settings button (top-right corner)
     settingsBtn.setBounds((int)(W - pad - 32), (int)(pad + 10), 24, 24);
 
-    // AI section
     {
         float aiX = rightX + 8, aiW = rightW - 16;
         float aiY = dspY + 22;
 
-        // Quick command buttons: 2 rows of 4
         float qW = (aiW - 12.f) / 4.f;
         for (int i = 0; i < NUM_QUICK; ++i) {
             int row = i / 4, col = i % 4;
             quickBtns[i].setBounds((int)(aiX + col * (qW + 4)), (int)(aiY + row * 28), (int)(qW), 24);
         }
 
-        // Prompt + send
         float pY = aiY + 64.f;
         promptInput.setBounds((int)aiX, (int)pY, (int)(aiW - 68), 28);
         sendBtn.setBounds((int)(aiX + aiW - 64), (int)pY, 60, 28);
 
-        // Undo + status
         undoBtn.setBounds((int)aiX, (int)(pY + 34), 56, 22);
         statusLabel.setBounds((int)(aiX + 62), (int)(pY + 36), (int)(aiW - 62), 18);
     }
 
-    // Patch section
     {
         float pX = rightX + 8, pW = rightW - 16, pY = dspY + 184 + 10;
         float nW = (pW - 8.f) * 0.38f;
@@ -689,11 +654,14 @@ void KeroMixAIAudioProcessorEditor::resized()
         saveBtn.setBounds((int)(pX + nW + 4), (int)pY, 44, 26);
         patchList.setBounds((int)(pX + nW + 52), (int)pY, (int)(pW - nW - 104), 26);
         loadBtn.setBounds((int)(pX + pW - 52), (int)pY, 40, 26);
-        deleteBtn.setBounds((int)(pX + pW - 8), (int)pY, 0, 26); // hidden, too tight
-        // simplify: drop deleteBtn if no space
         deleteBtn.setVisible(false);
     }
 
     if (settingsPanel)
         settingsPanel->setBounds((int)(W - 290), 40, 270, 170);
+}
+
+void KeroMixAIAudioProcessorEditor::mouseDown(const juce::MouseEvent&)
+{
+    hideSettings();
 }
