@@ -29,7 +29,6 @@ public:
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
-    // Patch save/load
     void savePatch(const juce::String& name);
     juce::StringArray getSavedPatchNames();
     bool loadPatch(const juce::String& name);
@@ -37,24 +36,24 @@ public:
     juce::File getPatchDirectory();
 
     juce::AudioProcessorValueTreeState apvts;
-
     std::atomic<bool> bypassed{ false };
 
-    // FFT shared with editor
     static const int FFT_SIZE = 2048;
-    float            fftFifo[FFT_SIZE] = {};
-    int              fftFifoIndex = 0;
-    bool             fftDataReady = false;
+    float fftFifo[FFT_SIZE] = {};
+    int   fftFifoIndex = 0;
+    bool  fftDataReady = false;
     juce::CriticalSection fftLock;
 
 private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     juce::IIRFilter eqFilters[2][3];
-    float compEnv[2] = { 0.f, 0.f };
-    float compGainDb[2] = { 0.f, 0.f };
+    float           compEnv[2]    = { 0.f, 0.f };
+    float           compGainDb[2] = { 0.f, 0.f };
+
     juce::AudioBuffer<float> delayBuffer;
     int writePos = 0;
+
     juce::Reverb reverbEngine;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(KeroMixAIAudioProcessor)
