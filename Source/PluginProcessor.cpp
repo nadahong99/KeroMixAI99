@@ -83,9 +83,6 @@ void KeroMixAIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juc
     const double sr = getSampleRate();
     if (sr <= 0.0) return;
 
-    // ── Bypass ────────────────────────────────────────────────────────────
-    if (bypassed.load()) return;
-
     // ── EQ (parametric 3-band) ────────────────────────────────────────────
     {
         float lG = juce::Decibels::decibelsToGain((float)*apvts.getRawParameterValue("lowG"));
