@@ -1,19 +1,25 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-// ── Static & Group Data ──────────────────────────────────────────────────────
-const int KeroMixAIAudioProcessorEditor::PARAM_GROUP[NUM_PARAMS] =
-{ 0,0, 0,0,0, 0,0,  1,1,1,1,1,  2,2,2,  3,3,3,3,  4 };
-
 // ── Colours ───────────────────────────────────────────────────────────────────
 static const juce::Colour kBg(0xffF7F9F7);
 static const juce::Colour kCard(0xffffffff);
 static const juce::Colour kGreen(0xff4C724D);
 static const juce::Colour kKero(0xff99CC00);
+static const juce::Colour kEqBg(0xffEAF4EA);
+static const juce::Colour kCompBg(0xffFFF8EE);
+static const juce::Colour kDelayBg(0xffF3EEFF);
+static const juce::Colour kVerbBg(0xffE6F4FF);
+static const juce::Colour kAiBg(0xffF3F8F3);
+static const juce::Colour kPatchBg(0xffFAFAFA);
 static const juce::Colour kBorder(0xffe8e8e8);
 static const juce::Colour kLabel(0xff5c7c5d);
 static const juce::Colour kLockOn(0xffff9800);
 static const juce::Colour kLockOff(0xffe8e8e8);
+
+// group per param
+const int KeroMixAIAudioProcessorEditor::PARAM_GROUP[NUM_PARAMS] =
+{ 0,0, 0,0,0, 0,0,  1,1,1,1,1,  2,2,2,  3,3,3,3,  4 };
 
 // ── Constructor ───────────────────────────────────────────────────────────────
 KeroMixAIAudioProcessorEditor::KeroMixAIAudioProcessorEditor(KeroMixAIAudioProcessor& p)
@@ -21,27 +27,33 @@ KeroMixAIAudioProcessorEditor::KeroMixAIAudioProcessorEditor(KeroMixAIAudioProce
 {
     setSize(900, 540);
 
-    // 슬라이더 및 레이블 초기화
+    // Sliders
     for (int i = 0; i < NUM_PARAMS; ++i)
     {
         auto& s = sliders[i];
-        if (i == NUM_PARAMS - 1) { // MASTER GAIN
+        if (i == NUM_PARAMS - 1) // MASTER
+        {
             s.setSliderStyle(juce::Slider::LinearHorizontal);
             s.setTextBoxStyle(juce::Slider::TextBoxRight, false, 50, 18);
         }
-        else {
+        else
+        {
             s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
             s.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 50, 15);
         }
+        s.setColour(juce::Slider::rotarySliderOutlineColourId, kKero.withAlpha(0.18f));
         s.setColour(juce::Slider::rotarySliderFillColourId, kKero);
+        s.setColour(juce::Slider::thumbColourId, juce::Colours::white);
         s.setColour(juce::Slider::textBoxTextColourId, kGreen);
         s.setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xffdddddd));
+        s.setColour(juce::Slider::textBoxBackgroundColourId, juce::Colours::white);
+        s.setColour(juce::Slider::trackColourId, kKero.withAlpha(0.3f));
         addAndMakeVisible(s);
 
         auto& l = labels[i];
         l.setText(paramNames[i], juce::dontSendNotification);
         l.setJustificationType(juce::Justification::centred);
-        l.setFont(juce::Font(10.0f, juce::Font::bold));
+        l.setFont(juce::Font(9.5f, juce::Font::bold));
         l.setColour(juce::Label::textColourId, kLabel);
         addAndMakeVisible(l);
 
@@ -49,246 +61,639 @@ KeroMixAIAudioProcessorEditor::KeroMixAIAudioProcessorEditor(KeroMixAIAudioProce
             audioProcessor.apvts, paramIDs[i], s);
     }
 
-    // 그룹 잠금 버튼
+    // Lock buttons
     for (int g = 0; g < NUM_GROUPS; ++g)
     {
         auto& btn = lockBtns[g];
         btn.setButtonText(groupNames[g]);
         btn.setColour(juce::TextButton::buttonColourId, kLockOff);
+        btn.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff888888));
         btn.setClickingTogglesState(true);
         btn.onClick = [this, g]() {
             locked[g] = lockBtns[g].getToggleState();
-            lockBtns[g].setColour(juce::TextButton::buttonColourId, locked[g] ? kLockOn : kLockOff);
+            lockBtns[g].setColour(juce::TextButton::buttonColourId,
+                locked[g] ? kLockOn : kLockOff);
+            lockBtns[g].setColour(juce::TextButton::textColourOffId,
+                locked[g] ? juce::Colours::white : juce::Colour(0xff888888));
             };
         addAndMakeVisible(btn);
     }
 
-    // AI 입력 창 및 버튼
+    // Prompt
     promptInput.setMultiLine(false);
-    promptInput.setTextToShowWhenEmpty("부사(약간, 훨씬 등)를 넣어 명령하세요...", juce::Colour(0xffaaaaaa));
+    promptInput.setReturnKeyStartsNewLine(false);
+    promptInput.setTextToShowWhenEmpty("Describe what you want...", juce::Colour(0xffaaaaaa));
+    promptInput.setFont(juce::Font(12.f));
+    promptInput.setColour(juce::TextEditor::backgroundColourId, juce::Colours::white);
+    promptInput.setColour(juce::TextEditor::outlineColourId, kKero.withAlpha(0.5f));
+    promptInput.setColour(juce::TextEditor::textColourId, juce::Colour(0xff333333));
     promptInput.onReturnKey = [this]() { sendToGroq(promptInput.getText()); };
     addAndMakeVisible(promptInput);
 
     sendBtn.setButtonText("Apply AI");
     sendBtn.setColour(juce::TextButton::buttonColourId, kKero);
+    sendBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     sendBtn.onClick = [this]() { sendToGroq(promptInput.getText()); };
     addAndMakeVisible(sendBtn);
 
     undoBtn.setButtonText("Undo");
+    undoBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xffffe0b2));
+    undoBtn.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff8d4a00));
     undoBtn.setEnabled(false);
     undoBtn.onClick = [this]() { restoreSnapshot(); };
     addAndMakeVisible(undoBtn);
 
+    statusLabel.setText("", juce::dontSendNotification);
+    statusLabel.setFont(juce::Font(10.5f));
+    statusLabel.setColour(juce::Label::textColourId, juce::Colour(0xff888888));
     statusLabel.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(statusLabel);
 
-    // 퀵 버튼 8개
+    // Quick command buttons
     for (int i = 0; i < NUM_QUICK; ++i)
     {
         quickBtns[i].setButtonText(quickCmds[i]);
+        quickBtns[i].setColour(juce::TextButton::buttonColourId, juce::Colour(0xffE8F5E9));
+        quickBtns[i].setColour(juce::TextButton::textColourOffId, kGreen);
         quickBtns[i].onClick = [this, i]() { sendToGroq(quickCmds[i]); };
         addAndMakeVisible(quickBtns[i]);
     }
 
-    settingsBtn.setButtonText(juce::CharPointer_UTF8("\xe2\x9a\x99"));
+    // Settings button
+    settingsBtn.setButtonText(juce::CharPointer_UTF8("\xe2\x9a\x99")); // gear emoji
+    settingsBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xffeeeeee));
+    settingsBtn.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff666666));
     settingsBtn.onClick = [this]() { showSettings(); };
     addAndMakeVisible(settingsBtn);
 
-    // 패치 시스템
+    // Patch UI
     patchNameInput.setTextToShowWhenEmpty("Patch name...", juce::Colour(0xffaaaaaa));
+    patchNameInput.setFont(juce::Font(11.f));
+    patchNameInput.setColour(juce::TextEditor::backgroundColourId, juce::Colours::white);
+    patchNameInput.setColour(juce::TextEditor::outlineColourId, juce::Colour(0xffdddddd));
+    patchNameInput.setColour(juce::TextEditor::textColourId, juce::Colour(0xff333333));
     addAndMakeVisible(patchNameInput);
 
     saveBtn.setButtonText("Save");
+    saveBtn.setColour(juce::TextButton::buttonColourId, kKero);
+    saveBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
     saveBtn.onClick = [this]() {
         auto name = patchNameInput.getText().trim();
-        if (name.isNotEmpty()) { audioProcessor.savePatch(name); refreshPatchList(); }
+        if (name.isEmpty()) { statusLabel.setText("Enter patch name!", juce::dontSendNotification); return; }
+        audioProcessor.savePatch(name);
+        refreshPatchList();
+        statusLabel.setText("Saved: " + name, juce::dontSendNotification);
         };
     addAndMakeVisible(saveBtn);
 
     loadBtn.setButtonText("Load");
-    loadBtn.onClick = [this]() { audioProcessor.loadPatch(patchList.getText()); };
+    loadBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff4a90d9));
+    loadBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    loadBtn.onClick = [this]() {
+        auto name = patchList.getText();
+        if (name.isEmpty()) return;
+        audioProcessor.loadPatch(name);
+        statusLabel.setText("Loaded: " + name, juce::dontSendNotification);
+        };
     addAndMakeVisible(loadBtn);
 
     deleteBtn.setButtonText("Del");
-    deleteBtn.onClick = [this]() { audioProcessor.deletePatch(patchList.getText()); refreshPatchList(); };
+    deleteBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xffe57373));
+    deleteBtn.setColour(juce::TextButton::textColourOffId, juce::Colours::white);
+    deleteBtn.onClick = [this]() {
+        auto name = patchList.getText();
+        if (name.isEmpty()) return;
+        audioProcessor.deletePatch(name);
+        refreshPatchList();
+        statusLabel.setText("Deleted: " + name, juce::dontSendNotification);
+        };
     addAndMakeVisible(deleteBtn);
 
+    patchList.setTextWhenNothingSelected("-- select --");
+    patchList.setColour(juce::ComboBox::backgroundColourId, juce::Colours::white);
+    patchList.setColour(juce::ComboBox::outlineColourId, juce::Colour(0xffdddddd));
     addAndMakeVisible(patchList);
     refreshPatchList();
 
     groqApiKey = loadApiKey();
+    if (groqApiKey.isEmpty()) showSettings();
+
     startTimerHz(30);
 }
 
-KeroMixAIAudioProcessorEditor::~KeroMixAIAudioProcessorEditor() { stopTimer(); stopThread(2000); }
-
-// ── 필수 가상 함수 (링커 에러 방지용 전체 구현) ──────────────────────────────────
-void KeroMixAIAudioProcessorEditor::paint(juce::Graphics& g)
+KeroMixAIAudioProcessorEditor::~KeroMixAIAudioProcessorEditor()
 {
-    g.fillAll(kBg);
-    auto card = getLocalBounds().reduced(10).toFloat();
-    g.setColour(kCard); g.fillRoundedRectangle(card, 15.f);
-    g.setColour(kBorder); g.drawRoundedRectangle(card, 15.f, 1.5f);
-    drawKeropi(g, 25, 15, 0.7f);
+    stopTimer();
+    stopThread(2000);
 }
 
-void KeroMixAIAudioProcessorEditor::resized()
+// ── Settings panel ────────────────────────────────────────────────────────────
+void KeroMixAIAudioProcessorEditor::showSettings()
 {
-    auto area = getLocalBounds().reduced(20);
-    auto rightSide = area.removeFromRight(300);
-
-    // 퀵 버튼 8개 배치
-    auto btnArea = rightSide.removeFromTop(80);
-    int bW = btnArea.getWidth() / 4, bH = 35;
-    for (int i = 0; i < NUM_QUICK; ++i)
-        quickBtns[i].setBounds(btnArea.getX() + (i % 4) * bW, btnArea.getY() + (i / 4) * bH, bW - 4, bH - 4);
-
-    // AI 입력
-    auto aiArea = rightSide.removeFromTop(100);
-    promptInput.setBounds(aiArea.removeFromTop(35).reduced(2));
-    sendBtn.setBounds(aiArea.removeFromTop(35).removeFromRight(80).reduced(2));
-    undoBtn.setBounds(aiArea.removeFromLeft(60).reduced(2));
-    statusLabel.setBounds(aiArea.reduced(2));
-
-    // 패치 시스템
-    auto patchArea = rightSide.removeFromTop(50);
-    patchNameInput.setBounds(patchArea.removeFromLeft(100).reduced(2));
-    saveBtn.setBounds(patchArea.removeFromLeft(50).reduced(2));
-    patchList.setBounds(patchArea.removeFromLeft(80).reduced(2));
-    loadBtn.setBounds(patchArea.removeFromLeft(50).reduced(2));
-
-    settingsBtn.setBounds(getWidth() - 40, 15, 25, 25);
-
-    // 슬라이더 배치는 공간에 맞춰 자동 루프 (기본 구현)
-    auto sliderArea = area.removeFromLeft(getWidth() - 350);
-    int cols = 5, rows = 4;
-    int sW = sliderArea.getWidth() / cols, sH = sliderArea.getHeight() / rows;
-    for (int i = 0; i < NUM_PARAMS - 1; ++i) {
-        int r = i / cols, c = i % cols;
-        sliders[i].setBounds(sliderArea.getX() + c * sW, sliderArea.getY() + r * sH, sW - 10, sH - 25);
-        labels[i].setBounds(sliders[i].getX(), sliders[i].getBottom(), sW - 10, 20);
-    }
+    settingsPanel = std::make_unique<SettingsComponent>();
+    settingsPanel->setBounds(getWidth() - 280, 40, 270, 170);
+    settingsPanel->onKeyEntered = [this](const juce::String& key) {
+        groqApiKey = key;
+        saveApiKey(key);
+        hideSettings();
+        statusLabel.setText("API key saved!", juce::dontSendNotification);
+        };
+    settingsPanel->onClose = [this]() { hideSettings(); };
+    addAndMakeVisible(*settingsPanel);
+    settingsPanel->toFront(true);
 }
 
-void KeroMixAIAudioProcessorEditor::timerCallback() { /* 스펙트럼 로직 필요시 추가 */ }
-void KeroMixAIAudioProcessorEditor::mouseDown(const juce::MouseEvent& e) { hideSettings(); }
+void KeroMixAIAudioProcessorEditor::hideSettings()
+{
+    if (settingsPanel) { removeChildComponent(settingsPanel.get()); settingsPanel.reset(); }
+}
 
-// ── AI & Logic ────────────────────────────────────────────────────────────────
-void KeroMixAIAudioProcessorEditor::saveSnapshot() {
+// ── Patch ─────────────────────────────────────────────────────────────────────
+void KeroMixAIAudioProcessorEditor::refreshPatchList()
+{
+    patchList.clear();
+    auto names = audioProcessor.getSavedPatchNames();
+    for (int i = 0; i < names.size(); ++i)
+        patchList.addItem(names[i], i + 1);
+}
+
+// ── Undo ──────────────────────────────────────────────────────────────────────
+void KeroMixAIAudioProcessorEditor::saveSnapshot()
+{
     for (int i = 0; i < NUM_PARAMS; ++i)
         undoSnapshot[i] = (float)*audioProcessor.apvts.getRawParameterValue(paramIDs[i]);
-    hasUndoSnapshot = true; undoBtn.setEnabled(true);
+    hasUndoSnapshot = true;
+    undoBtn.setEnabled(true);
 }
 
-void KeroMixAIAudioProcessorEditor::restoreSnapshot() {
+void KeroMixAIAudioProcessorEditor::restoreSnapshot()
+{
     if (!hasUndoSnapshot) return;
-    for (int i = 0; i < NUM_PARAMS; ++i) {
-        if (auto* p = audioProcessor.apvts.getParameter(paramIDs[i])) {
-            auto range = audioProcessor.apvts.getParameterRange(paramIDs[i]);
-            p->setValueNotifyingHost(range.convertTo0to1(undoSnapshot[i]));
+    for (int i = 0; i < NUM_PARAMS; ++i)
+        if (auto* param = audioProcessor.apvts.getParameter(paramIDs[i]))
+            param->setValueNotifyingHost(
+                audioProcessor.apvts.getParameterRange(paramIDs[i]).convertTo0to1(undoSnapshot[i]));
+    undoBtn.setEnabled(false);
+    hasUndoSnapshot = false;
+    statusLabel.setText("Reverted.", juce::dontSendNotification);
+}
+
+// ── API key ───────────────────────────────────────────────────────────────────
+void KeroMixAIAudioProcessorEditor::saveApiKey(const juce::String& key)
+{
+    auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("KeroMixAI");
+    dir.createDirectory();
+    dir.getChildFile("config.txt").replaceWithText(key);
+}
+
+juce::String KeroMixAIAudioProcessorEditor::loadApiKey()
+{
+    auto f = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+        .getChildFile("KeroMixAI").getChildFile("config.txt");
+    return f.existsAsFile() ? f.loadFileAsString().trim() : juce::String();
+}
+
+// ── FFT ───────────────────────────────────────────────────────────────────────
+void KeroMixAIAudioProcessorEditor::processFFT()
+{
+    fftWindow.multiplyWithWindowingTable(fftData, FFT_SIZE);
+    fft.performFrequencyOnlyForwardTransform(fftData);
+
+    const double sr = audioProcessor.getSampleRate();
+    if (sr <= 0.0) return;
+    const int    bins = FFT_SIZE / 2;
+    const double bw = sr / FFT_SIZE;
+
+    auto toDb = [&](int s, int e) -> float {
+        float sum = 0.f; int n = 0;
+        for (int i = s; i < e && i < bins; ++i) { sum += fftData[i] * fftData[i]; ++n; }
+        if (!n) return -60.f;
+        return juce::jmax(-60.f, juce::Decibels::gainToDecibels(std::sqrt(sum / n) / FFT_SIZE));
+        };
+
+    int lEnd = (int)(300.0 / bw), mEnd = (int)(4000.0 / bw), hEnd = (int)(20000.0 / bw);
+    const float a = 0.15f;
+    specLow += a * (toDb(1, lEnd) - specLow);
+    specMid += a * (toDb(lEnd, mEnd) - specMid);
+    specHigh += a * (toDb(mEnd, hEnd) - specHigh);
+    fftDataReady = false;
+}
+
+void KeroMixAIAudioProcessorEditor::timerCallback()
+{
+    {
+        juce::ScopedLock sl(audioProcessor.fftLock);
+        if (audioProcessor.fftDataReady)
+        {
+            juce::zeromem(fftData, sizeof(fftData));
+            memcpy(fftData, audioProcessor.fftFifo, sizeof(float) * FFT_SIZE);
+            audioProcessor.fftDataReady = false;
+            fftDataReady = true;
         }
     }
-    undoBtn.setEnabled(false);
+    if (fftDataReady) processFFT();
+    repaint();
 }
 
+// ── Groq ──────────────────────────────────────────────────────────────────────
 void KeroMixAIAudioProcessorEditor::sendToGroq(const juce::String& prompt)
 {
-    if (prompt.trim().isEmpty() || groqApiKey.isEmpty()) return;
+    if (prompt.trim().isEmpty()) return;
+    if (groqApiKey.isEmpty()) { showSettings(); return; }
+
     saveSnapshot();
-    juce::String currentParams = "{";
-    for (int i = 0; i < NUM_PARAMS; ++i) {
-        currentParams << "\"" << paramIDs[i] << "\":" << (float)*audioProcessor.apvts.getRawParameterValue(paramIDs[i]) << (i == NUM_PARAMS - 1 ? "" : ",");
+
+    juce::String lockedList, currentParams = "{";
+    for (int i = 0; i < NUM_PARAMS; ++i)
+    {
+        if (i > 0) currentParams << ",";
+        currentParams << "\"" << paramIDs[i] << "\":"
+            << (float)*audioProcessor.apvts.getRawParameterValue(paramIDs[i]);
+        if (isParamInLockedGroup(i))
+            lockedList += (lockedList.isEmpty() ? "" : ",") + paramIDs[i];
     }
     currentParams << "}";
-    { juce::ScopedLock sl(threadLock); pendingPrompt = prompt + "|||" + currentParams; }
-    statusLabel.setText("Thinking...", juce::dontSendNotification);
-    startThread();
+
+    juce::String spec;
+    spec << "Low:" << juce::String(specLow, 1) << "dB Mid:" << juce::String(specMid, 1)
+        << "dB High:" << juce::String(specHigh, 1) << "dB";
+
+    {
+        juce::ScopedLock sl(threadLock);
+        pendingPrompt = prompt + "|||" + currentParams + "|||" + lockedList + "|||" + spec;
+    }
+
+    statusLabel.setText("Processing...", juce::dontSendNotification);
+    sendBtn.setEnabled(false);
+    for (int i = 0; i < NUM_QUICK; ++i) quickBtns[i].setEnabled(false);
+    if (!isThreadRunning()) startThread();
 }
 
 void KeroMixAIAudioProcessorEditor::run()
 {
-    juce::String full; { juce::ScopedLock sl(threadLock); full = pendingPrompt; }
+    juce::String full;
+    { juce::ScopedLock sl(threadLock); full = pendingPrompt; }
+
     auto parts = juce::StringArray::fromTokens(full, "|||", "");
-    if (parts.size() < 2) return;
+    auto uText = parts[0];
+    auto curJson = parts.size() > 1 ? parts[1] : "{}";
+    auto locked = parts.size() > 2 ? parts[2] : "";
+    auto spec = parts.size() > 3 ? parts[3] : "";
 
-    juce::String sys = "Audio Expert. Rules: Default change 15-20%. Slightly/Low 5-8%. Much/High 40-60%. ONLY JSON.";
+    juce::String lockNote = locked.isEmpty()
+        ? "No params locked."
+        : "LOCKED - do NOT change: " + locked + ". Omit from JSON.";
+
+    juce::String sys =
+        "You are an audio mix engineer AI. "
+        "Input: current param values, spectrum LOW/MID/HIGH dB, user request. "
+        "Output: ONLY a JSON object with changed param keys. "
+        "Params: lowG/midG/highG dB, lowFreq/midFreq/highFreq Hz, midQ 0.3-4, "
+        "compThresh dB, compRatio, compAttack ms, compRelease ms, compMakeup dB, "
+        "delayTime s, delayFeedback 0-0.9, delayMix 0-1, "
+        "revDecay/revSize/revDamp/revMix 0-1, aimix 0-1. "
+        "Rules:1.Small changes unless user says much/a lot. "
+        "2.Base on current values. Never reset. "
+        "3." + lockNote + " "
+        "4.Use spectrum to guide EQ. "
+        "5.warm=+lowG-highG.bright=+highG.punchy=+compRatio-compThresh."
+        "airy=+revMix+revSize.dry=-revMix-delayMix.muddy=-lowG-midG.harsh=-highG. "
+        "6.JSON only. No markdown.";
+
+    auto esc = [](const juce::String& s) -> juce::String {
+        juce::String r;
+        for (int i = 0; i < s.length(); ++i) {
+            auto c = s[i];
+            if (c == '"')  r << "\\\"";
+            else if (c == '\\') r << "\\\\";
+            else if (c == '\n') r << "\\n";
+            else if (c == '\r') r << "\\r";
+            else if (c == '\t') r << "\\t";
+            else              r << juce::String::charToString(c);
+        }
+        return r;
+        };
+
+    juce::String msgs = "[{\"role\":\"system\",\"content\":\"" + esc(sys) + "\"}";
+    for (auto& m : chatHistory)
+        msgs += ",{\"role\":\"" + esc(m.role) + "\",\"content\":\"" + esc(m.content) + "\"}";
+    juce::String uc = "Spectrum:" + spec + " Params:" + curJson + " Request:" + esc(uText);
+    msgs += ",{\"role\":\"user\",\"content\":\"" + esc(uc) + "\"}]";
+
+    juce::String body;
+    body << "{\"model\":\"llama-3.1-8b-instant\","
+        << "\"messages\":" << msgs << ","
+        << "\"max_tokens\":300,\"temperature\":0.2}";
+
     juce::URL url("https://api.groq.com/openai/v1/chat/completions");
-    auto body = "{\"model\":\"llama-3.1-8b-instant\",\"messages\":[{\"role\":\"system\",\"content\":\"" + sys + "\"},{\"role\":\"user\",\"content\":\"Current:" + parts[1].replace("\"", "\\\"") + " Req:" + parts[0].replace("\"", "\\\"") + "\"}],\"temperature\":0.1}";
+    auto ws = url.withPOSTData(body).createInputStream(
+        juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inPostData)
+        .withExtraHeaders("Authorization: Bearer " + groqApiKey + "\r\nContent-Type: application/json")
+        .withConnectionTimeoutMs(12000));
 
-    auto ws = url.withPOSTData(body).createInputStream(juce::URL::InputStreamOptions(juce::URL::ParameterHandling::inPostData)
-        .withExtraHeaders("Authorization: Bearer " + groqApiKey + "\r\nContent-Type: application/json").withConnectionTimeoutMs(10000));
+    if (!ws) {
+        juce::MessageManager::callAsync([this]() {
+            statusLabel.setText("Connection failed.", juce::dontSendNotification);
+            sendBtn.setEnabled(true);
+            for (int i = 0; i < NUM_QUICK; ++i) quickBtns[i].setEnabled(true);
+            });
+        return;
+    }
 
-    if (ws) {
-        juce::String resp = ws->readEntireStreamAsString();
-        int ci = resp.indexOf("\"content\":");
-        if (ci >= 0) {
-            int start = resp.indexOf(ci, "{");
-            int end = resp.lastIndexOf("}");
-            if (start >= 0 && end > start) {
-                juce::String pj = resp.substring(start, end + 1).replace("\\\"", "\"").replace("\\n", " ");
-                juce::MessageManager::callAsync([this, pj]() { applyParamsFromJson(pj); });
-                return;
+    juce::String resp = ws->readEntireStreamAsString();
+    juce::String pj;
+    int ci = resp.indexOf("\"content\":\"");
+    if (ci >= 0) {
+        int bs = resp.indexOf(ci, "{");
+        if (bs >= 0) {
+            int depth = 0, be = -1;
+            for (int i = bs; i < resp.length(); ++i) {
+                if (resp[i] == '{') ++depth;
+                else if (resp[i] == '}') { if (--depth == 0) { be = i; break; } }
             }
+            if (be > bs)
+                pj = resp.substring(bs, be + 1).replace("\\n", " ").replace("\\\"", "\"").replace("\\/", "/");
         }
     }
-    juce::MessageManager::callAsync([this]() { statusLabel.setText("Error.", juce::dontSendNotification); });
+
+    if (pj.isEmpty()) {
+        juce::File::getSpecialLocation(juce::File::userDesktopDirectory)
+            .getChildFile("keromix_debug.txt").replaceWithText(resp);
+        juce::MessageManager::callAsync([this]() {
+            statusLabel.setText("Parse failed. See keromix_debug.txt", juce::dontSendNotification);
+            sendBtn.setEnabled(true);
+            for (int i = 0; i < NUM_QUICK; ++i) quickBtns[i].setEnabled(true);
+            });
+        return;
+    }
+
+    chatHistory.push_back({ "user",      "Params:" + curJson + " Request:" + uText });
+    chatHistory.push_back({ "assistant", pj });
+    if ((int)chatHistory.size() > MAX_HISTORY * 2)
+        chatHistory.erase(chatHistory.begin(), chatHistory.begin() + 2);
+
+    juce::MessageManager::callAsync([this, pj]() { applyParamsFromJson(pj); });
 }
 
 void KeroMixAIAudioProcessorEditor::applyParamsFromJson(const juce::String& json)
 {
-    int count = 0;
-    for (int i = 0; i < NUM_PARAMS; ++i) {
-        if (locked[PARAM_GROUP[i]]) continue;
+    int applied = 0;
+    for (int i = 0; i < NUM_PARAMS; ++i)
+    {
+        if (isParamInLockedGroup(i)) continue;
         juce::String search = "\"" + paramIDs[i] + "\":";
         int pos = json.indexOf(search);
         if (pos < 0) continue;
         pos += search.length();
-        while (pos < json.length() && !juce::CharacterFunctions::isDigit(json[pos]) && json[pos] != '-') ++pos;
+        while (pos < json.length() && json[pos] == ' ') ++pos;
         int end = pos;
-        while (end < json.length() && (juce::CharacterFunctions::isDigit(json[end]) || json[end] == '.' || json[end] == '-')) ++end;
+        while (end < json.length() &&
+            (json[end] == '-' || json[end] == '.' || (json[end] >= '0' && json[end] <= '9'))) ++end;
         if (end > pos) {
             float v = json.substring(pos, end).getFloatValue();
             if (auto* param = audioProcessor.apvts.getParameter(paramIDs[i])) {
                 auto range = audioProcessor.apvts.getParameterRange(paramIDs[i]);
                 param->setValueNotifyingHost(range.convertTo0to1(juce::jlimit(range.start, range.end, v)));
-                count++;
+                ++applied;
             }
         }
     }
-    statusLabel.setText("Applied " + juce::String(count) + " changes.", juce::dontSendNotification);
+    promptInput.clear();
+    statusLabel.setText("AI applied! (" + juce::String(applied) + " params)", juce::dontSendNotification);
+    sendBtn.setEnabled(true);
+    for (int i = 0; i < NUM_QUICK; ++i) quickBtns[i].setEnabled(true);
 }
 
-// ── Helpers & Settings ────────────────────────────────────────────────────────
-void KeroMixAIAudioProcessorEditor::showSettings() {
-    settingsPanel = std::make_unique<SettingsComponent>();
-    settingsPanel->onKeyEntered = [this](const juce::String& k) { saveApiKey(k); groqApiKey = k; hideSettings(); };
-    settingsPanel->onClose = [this]() { hideSettings(); };
-    addAndMakeVisible(*settingsPanel);
-    settingsPanel->setBounds(getLocalBounds().reduced(100, 150));
-}
-
-void KeroMixAIAudioProcessorEditor::hideSettings() { settingsPanel.reset(); }
-
-void KeroMixAIAudioProcessorEditor::refreshPatchList() {
-    patchList.clear(); auto names = audioProcessor.getSavedPatchNames();
-    for (int i = 0; i < names.size(); ++i) patchList.addItem(names[i], i + 1);
-}
-
-void KeroMixAIAudioProcessorEditor::saveApiKey(const juce::String& k) {
-    auto f = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("KeroMixAI/config.txt");
-    f.createDirectory(); f.replaceWithText(k);
-}
-
-juce::String KeroMixAIAudioProcessorEditor::loadApiKey() {
-    auto f = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory).getChildFile("KeroMixAI/config.txt");
-    return f.existsAsFile() ? f.loadFileAsString().trim() : "";
-}
-
-void KeroMixAIAudioProcessorEditor::drawKeropi(juce::Graphics& g, float x, float y, float sc) {
-    g.setColour(kKero); g.fillEllipse(x, y + 13 * sc, 55 * sc, 45 * sc);
-    g.setColour(juce::Colours::black); g.drawEllipse(x, y + 13 * sc, 55 * sc, 45 * sc, 2 * sc);
-    g.setColour(juce::Colours::white);
-    g.fillEllipse(x + 5 * sc, y, 22 * sc, 22 * sc); g.fillEllipse(x + 28 * sc, y, 22 * sc, 22 * sc);
+// ── Draw helpers ──────────────────────────────────────────────────────────────
+void KeroMixAIAudioProcessorEditor::drawKeropi(juce::Graphics& g, float x, float y, float sc)
+{
+    g.setColour(kKero);
+    g.fillEllipse(x, y + 13 * sc, 55 * sc, 45 * sc);
     g.setColour(juce::Colours::black);
-    g.fillEllipse(x + 12 * sc, y + 5 * sc, 8 * sc, 8 * sc); g.fillEllipse(x + 35 * sc, y + 5 * sc, 8 * sc, 8 * sc);
+    g.drawEllipse(x, y + 13 * sc, 55 * sc, 45 * sc, 2 * sc);
+    auto eye = [&](float ex, float ey) {
+        g.setColour(juce::Colours::white); g.fillEllipse(ex, ey, 22 * sc, 22 * sc);
+        g.setColour(juce::Colours::black); g.drawEllipse(ex, ey, 22 * sc, 22 * sc, 2 * sc);
+        };
+    eye(x - 2 * sc, y); eye(x + 35 * sc, y);
+    g.setColour(juce::Colours::black);
+    g.fillEllipse(x + 5 * sc, y + 7 * sc, 7 * sc, 7 * sc);
+    g.fillEllipse(x + 42 * sc, y + 7 * sc, 7 * sc, 7 * sc);
+    juce::Path mouth;
+    mouth.startNewSubPath(x + 20 * sc, y + 38 * sc);
+    mouth.lineTo(x + 27 * sc, y + 43 * sc);
+    mouth.lineTo(x + 34 * sc, y + 38 * sc);
+    g.strokePath(mouth, juce::PathStrokeType(2 * sc));
+}
+
+void KeroMixAIAudioProcessorEditor::drawSpectrumBar(juce::Graphics& g,
+    float x, float y, float w, float h, float dB, juce::Colour col)
+{
+    float norm = juce::jlimit(0.f, 1.f, (dB + 60.f) / 60.f);
+    g.setColour(col.withAlpha(0.2f)); g.fillRoundedRectangle(x, y, w, h, 3.f);
+    g.setColour(col.withAlpha(0.85f)); g.fillRoundedRectangle(x, y + h - norm * h, w, norm * h, 3.f);
+}
+
+void KeroMixAIAudioProcessorEditor::drawSectionBg(juce::Graphics& g,
+    juce::Rectangle<float> r, juce::Colour bg, const juce::String& title)
+{
+    g.setColour(bg); g.fillRoundedRectangle(r, 12.f);
+    g.setColour(kGreen.withAlpha(0.7f));
+    g.setFont(juce::Font("Arial", 11.f, juce::Font::bold));
+    g.drawText(title, (int)r.getX() + 10, (int)r.getY() + 5, 60, 16, juce::Justification::left, false);
+}
+
+// ── Paint ─────────────────────────────────────────────────────────────────────
+void KeroMixAIAudioProcessorEditor::paint(juce::Graphics& g)
+{
+    const float W = (float)getWidth(), H = (float)getHeight();
+    const float pad = 10.f;
+
+    g.setColour(kBg); g.fillAll();
+
+    // Main card
+    juce::Rectangle<float> card(pad, pad, W - pad * 2, H - pad * 2);
+    g.setColour(kCard); g.fillRoundedRectangle(card, 18.f);
+    g.setColour(kBorder); g.drawRoundedRectangle(card, 18.f, 1.5f);
+
+    // Header strip
+    g.setColour(kGreen.withAlpha(0.06f));
+    g.fillRoundedRectangle(pad, pad, W - pad * 2, 44.f, 18.f);
+
+    // Keropi
+    drawKeropi(g, pad + 14, pad + 2, 0.62f);
+
+    // Title
+    g.setColour(kGreen);
+    g.setFont(juce::Font("Arial", 20.f, juce::Font::bold));
+    g.drawText("KeroMixAI", (int)(pad + 62), (int)(pad + 8), 180, 26, juce::Justification::left, false);
+    g.setFont(juce::Font(9.f));
+    g.setColour(juce::Colour(0xffaaaaaa));
+    g.drawText("by NADAHONG", (int)(pad + 62), (int)(pad + 28), 140, 14, juce::Justification::left, false);
+
+    // Divider between header and DSP
+    const float dspY = pad + 48.f;
+    const float leftW = W * 0.62f;  // DSP panel width
+    const float rightX = leftW + 4.f;
+    const float rightW = W - rightX - pad;
+
+    // Section backgrounds (left panel: EQ / COMP / DELAY / REVERB)
+    float colW = (leftW - pad * 2 - 8.f) / 2.f;
+
+    // Left col: EQ top, COMP bottom
+    drawSectionBg(g, { pad + 4, dspY,        colW, 190.f }, kEqBg, "EQ");
+    drawSectionBg(g, { pad + 4, dspY + 196.f,  colW, 240.f }, kCompBg, "COMP");
+
+    // Right col: DELAY top, REVERB below
+    drawSectionBg(g, { pad + 4 + colW + 6, dspY,        colW, 130.f }, kDelayBg, "DELAY");
+    drawSectionBg(g, { pad + 4 + colW + 6, dspY + 136.f,  colW, 300.f }, kVerbBg, "REVERB");
+
+    // Master bar background
+    g.setColour(juce::Colour(0xffF0F4F0));
+    g.fillRoundedRectangle(pad + 4, H - pad - 36.f, leftW - 8.f, 30.f, 8.f);
+    g.setColour(kGreen.withAlpha(0.5f));
+    g.setFont(juce::Font(9.f, juce::Font::bold));
+    g.drawText("MASTER", (int)(pad + 8), (int)(H - pad - 34), 50, 14, juce::Justification::left, false);
+
+    // Vertical divider
+    g.setColour(kBorder);
+    g.drawLine(leftW + 2, dspY, leftW + 2, H - pad, 1.f);
+
+    // Right panel sections
+    drawSectionBg(g, { rightX, dspY,        rightW, 178.f }, kAiBg, "AI MIX");
+    drawSectionBg(g, { rightX, dspY + 184.f,  rightW, 68.f }, kPatchBg, "PATCHES");
+
+    // Spectrum area (inside right panel, below patches)
+    g.setColour(juce::Colour(0xffEEF4EE));
+    g.fillRoundedRectangle(rightX, dspY + 258.f, rightW, 55.f, 8.f);
+    g.setColour(kGreen.withAlpha(0.4f));
+    g.setFont(juce::Font(9.f, juce::Font::bold));
+    g.drawText("SPECTRUM", (int)rightX + 10, (int)(dspY + 262), 65, 12, juce::Justification::left, false);
+
+    float bW = 22.f, bH = 32.f, bY = dspY + 262.f;
+    float bX = rightX + rightW / 2.f - bW * 1.5f - 4.f;
+    drawSpectrumBar(g, bX, bY, bW, bH, specLow, juce::Colour(0xff66bb6a));
+    drawSpectrumBar(g, bX + bW + 4, bY, bW, bH, specMid, juce::Colour(0xff42a5f5));
+    drawSpectrumBar(g, bX + bW * 2 + 8, bY, bW, bH, specHigh, juce::Colour(0xffef5350));
+    g.setFont(juce::Font(8.f)); g.setColour(juce::Colour(0xff999999));
+    g.drawText("L", (int)bX, (int)(bY + bH + 1), (int)bW, 10, juce::Justification::centred, false);
+    g.drawText("M", (int)(bX + bW + 4), (int)(bY + bH + 1), (int)bW, 10, juce::Justification::centred, false);
+    g.drawText("H", (int)(bX + bW * 2 + 8), (int)(bY + bH + 1), (int)bW, 10, juce::Justification::centred, false);
+}
+
+// ── Resized ───────────────────────────────────────────────────────────────────
+void KeroMixAIAudioProcessorEditor::resized()
+{
+    const float W = (float)getWidth();
+    const float H = (float)getHeight();
+    const float pad = 10.f;
+    const float dspY = pad + 52.f;
+    const float leftW = W * 0.62f;
+    const float colW = (leftW - pad * 2 - 8.f) / 2.f;
+    const float rightX = leftW + 4.f;
+    const float rightW = W - rightX - pad;
+
+    // ── Knob placer lambda ────────────────────────────────────────────────
+    // places 'count' knobs starting at paramIdx inside rect (rx,ry,rw,rh)
+    // skipping 'topSkip' pixels for the section title
+    auto placeRow = [&](int startIdx, int count, float rx, float ry, float rw, float rh, int topSkip)
+        {
+            const int kW = 58, kH = 58, lH = 14;
+            const float spacing = rw / count;
+            for (int i = 0; i < count; ++i)
+            {
+                int cx = (int)(rx + i * spacing + (spacing - kW) * 0.5f);
+                int cy = (int)(ry + topSkip);
+                labels[startIdx + i].setBounds(cx, cy, kW, lH);
+                sliders[startIdx + i].setBounds(cx, cy + lH, kW, kH);
+            }
+        };
+
+    // EQ: row1 lowG/midG/highG, row2 lowFreq/midFreq+midQ/highFreq
+    // row 1 (gains): indices 0,2,5
+    {
+        const int kW = 58, kH = 58, lH = 14, topSkip = 22;
+        float rx = pad + 6, ry = dspY, rw = colW - 4;
+        float sp = rw / 3.f;
+        int gainIdx[3] = { 0,2,5 };
+        for (int i = 0; i < 3; ++i) {
+            int cx = (int)(rx + i * sp + (sp - kW) * 0.5f), cy = (int)(ry + topSkip);
+            labels[gainIdx[i]].setBounds(cx, cy, kW, lH);
+            sliders[gainIdx[i]].setBounds(cx, cy + lH, kW, kH);
+        }
+        // row 2 (freqs+Q): indices 1,3,4,6
+        int fIdx[4] = { 1,3,4,6 };
+        float fSp = rw / 4.f;
+        for (int i = 0; i < 4; ++i) {
+            int cx = (int)(rx + i * fSp + (fSp - kW) * 0.5f), cy = (int)(ry + topSkip + kH + lH + 4);
+            labels[fIdx[i]].setBounds(cx, cy, kW - 4, lH);
+            sliders[fIdx[i]].setBounds(cx, cy + lH, kW - 4, 50);
+        }
+    }
+
+    // COMP: 5 knobs (thresh,ratio,attack,release,makeup) = indices 7-11
+    placeRow(7, 5, pad + 6, dspY + 196.f, colW - 4, 90.f, 22);
+    // second row: makeup on its own? No, all 5 in one row is fine at colW
+
+    // DELAY: indices 12-14
+    placeRow(12, 3, pad + 6 + colW + 6, dspY, colW - 4, 90.f, 22);
+
+    // REVERB: indices 15-18 (decay,size,damp,mix)
+    placeRow(15, 4, pad + 6 + colW + 6, dspY + 136.f, colW - 4, 90.f, 22);
+
+    // MASTER fader: index 19
+    {
+        labels[19].setBounds((int)(pad + 8), (int)(H - pad - 34), 52, 16);
+        sliders[19].setBounds((int)(pad + 62), (int)(H - pad - 38), (int)(leftW - 74), 32);
+    }
+
+    // Lock buttons (inside header strip, above section titles)
+    {
+        float lbW = (leftW - pad * 2 - 16.f) / NUM_GROUPS;
+        for (int g = 0; g < NUM_GROUPS; ++g)
+            lockBtns[g].setBounds((int)(pad + 6 + g * (lbW + 4)), (int)(pad + 30), (int)lbW, 16);
+    }
+
+    // ── Right panel ───────────────────────────────────────────────────────
+    // Settings button (top-right corner)
+    settingsBtn.setBounds((int)(W - pad - 32), (int)(pad + 10), 24, 24);
+
+    // AI section
+    {
+        float aiX = rightX + 8, aiW = rightW - 16;
+        float aiY = dspY + 22;
+
+        // Quick command buttons: 2 rows of 4
+        float qW = (aiW - 12.f) / 4.f;
+        for (int i = 0; i < NUM_QUICK; ++i) {
+            int row = i / 4, col = i % 4;
+            quickBtns[i].setBounds((int)(aiX + col * (qW + 4)), (int)(aiY + row * 28), (int)(qW), 24);
+        }
+
+        // Prompt + send
+        float pY = aiY + 64.f;
+        promptInput.setBounds((int)aiX, (int)pY, (int)(aiW - 68), 28);
+        sendBtn.setBounds((int)(aiX + aiW - 64), (int)pY, 60, 28);
+
+        // Undo + status
+        undoBtn.setBounds((int)aiX, (int)(pY + 34), 56, 22);
+        statusLabel.setBounds((int)(aiX + 62), (int)(pY + 36), (int)(aiW - 62), 18);
+    }
+
+    // Patch section
+    {
+        float pX = rightX + 8, pW = rightW - 16, pY = dspY + 184 + 10;
+        float nW = (pW - 8.f) * 0.38f;
+        patchNameInput.setBounds((int)pX, (int)pY, (int)nW, 26);
+        saveBtn.setBounds((int)(pX + nW + 4), (int)pY, 44, 26);
+        patchList.setBounds((int)(pX + nW + 52), (int)pY, (int)(pW - nW - 104), 26);
+        loadBtn.setBounds((int)(pX + pW - 52), (int)pY, 40, 26);
+        deleteBtn.setBounds((int)(pX + pW - 8), (int)pY, 0, 26); // hidden, too tight
+        // simplify: drop deleteBtn if no space
+        deleteBtn.setVisible(false);
+    }
+
+    if (settingsPanel)
+        settingsPanel->setBounds((int)(W - 290), 40, 270, 170);
 }
